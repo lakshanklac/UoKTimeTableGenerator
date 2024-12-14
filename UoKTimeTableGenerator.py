@@ -5,11 +5,10 @@ Created on Sat Dec 14 18:10:14 2024
 @author: K.L.A.C. LAKSHAN
 """
 
-
-def schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers, repetitions):
+def schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers, repetitions, pre_assignments):
     """
-    Schedule courses considering repetitions, time slots, room capacities, teacher availability,
-    daily uniqueness, and student priorities.
+    Schedule courses considering repetitions, pre-assigned classes, time slots, room capacities,
+    teacher availability, daily uniqueness, and student priorities.
     
     Args:
     courses (list): List of course names.
@@ -18,6 +17,7 @@ def schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers
     course_sizes (dict): Number of students for each course.
     teachers (dict): Mapping of courses to their assigned teachers.
     repetitions (dict): Number of days each course must repeat in a week.
+    pre_assignments (dict): Pre-assigned classes with format {course: (day, timeslot, room)}.
     
     Returns:
     dict: Schedule with course, room, and teacher assignments.
@@ -26,28 +26,32 @@ def schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers
     schedule = {day: {} for day in range(5)}  # Monday to Friday
     teacher_availability = {teacher: {day: set() for day in range(5)} for teacher in set(teachers.values())}
 
-    # Sort courses by the number of students (priority for larger classes)
-    sorted_courses = sorted(courses, key=lambda x: course_sizes[x], reverse=True)
+    # Handle pre-assignments first
+    for course, (day, timeslot, room) in pre_assignments.items():
+        teacher = teachers[course]
+        if repetitions[course] > 0:
+            if day not in schedule:
+                schedule[day] = {}
+            if timeslot not in schedule[day]:
+                schedule[day][timeslot] = {}
+            schedule[day][timeslot][room] = (course, teacher)
+            teacher_availability[teacher][day].add(timeslot)
+            repetitions[course] -= 1  # Reduce repetitions for pre-assigned courses
+
+    # Sort remaining courses by the number of repetitions (priority for higher repetitions)
+    sorted_courses = sorted(courses, key=lambda x: repetitions[x], reverse=True)
 
     for course in sorted_courses:
-        days_assigned = 0
         teacher = teachers[course]
-        assigned_days = set()
-
-        while days_assigned < repetitions[course]:
-            for day in range(5):
-                if day in assigned_days:
-                    continue
-
+        while repetitions[course] > 0:
+            for day in range(5):  # Loop through weekdays
                 for timeslot in range(len(room_capacities)):
-                    # Check if the teacher is available
+                    # Skip if teacher is unavailable at this timeslot
                     if timeslot in teacher_availability[teacher][day]:
                         continue
 
-                    # Ensure the same course doesn't appear twice on the same day
-                    if course in [
-                        data[0] for timeslot_rooms in schedule[day].values() for data in timeslot_rooms.values()
-                    ]:
+                    # Skip if the course is already scheduled on the same day
+                    if course in [data[0] for slot in schedule[day].values() for data in slot.values()]:
                         continue
 
                     for room_index, room_capacity in enumerate(room_capacities):
@@ -62,18 +66,17 @@ def schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers
                                     schedule[day][timeslot] = {}
                                 schedule[day][timeslot][room_index] = (course, teacher)
                                 teacher_availability[teacher][day].add(timeslot)
-                                assigned_days.add(day)
-                                days_assigned += 1
+                                repetitions[course] -= 1  # Reduce repetitions for the course
                                 break
-                    if days_assigned == repetitions[course]:
+                    if repetitions[course] == 0:
                         break
-                if days_assigned == repetitions[course]:
+                if repetitions[course] == 0:
                     break
 
     return schedule
 
 
-# Input: Courses, Conflicts, Room Capacities, Course Sizes, Teachers, and Repetitions
+# Input: Courses, Conflicts, Room Capacities, Course Sizes, Teachers, Repetitions, and Pre-Assignments
 courses = ['Math', 'Physics', 'Chemistry', 'Biology', 'Computer Science', 'Statistics', 'Electronics']
 conflicts = {
     'Math': ['Physics', 'Chemistry'],
@@ -112,9 +115,13 @@ repetitions = {
     'Statistics': 1,
     'Electronics': 1
 }
+pre_assignments = {
+    'Math': (0, 0, 0),  # Math is pre-set to be on Monday, Timeslot 1, Room R1
+    'Physics': (1, 1, 0)  # Physics is pre-set to be on Tuesday, Timeslot 2, Room R1
+}
 
 # Generate Timetable
-timetable = schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers, repetitions)
+timetable = schedule_classes(courses, conflicts, room_capacities, course_sizes, teachers, repetitions, pre_assignments)
 
 # Format and Print Timetable Day by Day
 days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
